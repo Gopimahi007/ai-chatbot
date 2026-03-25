@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, jsonify
-import sqlite3
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -16,56 +15,26 @@ if not GEMINI_API_KEY:
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialize the model exactly as you requested
+# Initialize the model
 model = genai.GenerativeModel('models/gemini-2.5-flash')
 
-# --- Database Setup (Unchanged) ---
-DB_FILE = 'chat_history.db'
-
-def init_db():
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sender TEXT NOT NULL,
-                text TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        conn.commit()
-
-def save_message(sender, text):
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO messages (sender, text) VALUES (?, ?)', (sender, text))
-        conn.commit()
-
-# --- Routes (Unchanged) ---
+# --- Routes ---
 @app.route('/')
 def home():
+    """Serves the main HTML interface."""
     return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
 def chat():
+    """Handles incoming chat messages and returns a response."""
     user_message = request.json.get('message', '')
-    save_message('user', user_message)
     
-    # Call the new Gemini logic
+    # Call the Gemini logic
     bot_response = generate_response(user_message)
     
-    save_message('bot', bot_response)
     return jsonify({"response": bot_response})
 
-@app.route('/history', methods=['GET'])
-def get_history():
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT sender, text FROM messages ORDER BY id ASC')
-        messages = cursor.fetchall()
-    return jsonify([{"sender": row[0], "text": row[1]} for row in messages])
-
-# --- NEW: Gemini Chatbot Logic ---
+# --- Gemini Chatbot Logic ---
 def generate_response(message):
     try:
         # Send the user's message to the Gemini API
@@ -79,5 +48,4 @@ def generate_response(message):
         return "I'm having trouble connecting to my brain right now. Please check the server logs."
 
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True, port=5000)
